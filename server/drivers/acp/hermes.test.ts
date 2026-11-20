@@ -459,6 +459,32 @@ describe("resolveHermesModels when Hermes has no model to list", () => {
     }
   });
 
+  it("lists Hermes' own catalog under its config default for a custom endpoint", async () => {
+    const { cli, env } = setup("", "model:\n  provider: custom\n  default: gpt-6.1-sol\n  base_url: http://127.0.0.1:9/v1\n");
+    writeFileSync(cli, `#!/usr/bin/env node
+let buf = "";
+process.stdin.on("data", (chunk) => {
+  buf += String(chunk);
+  let nl;
+  while ((nl = buf.indexOf("\\n")) >= 0) {
+    const msg = JSON.parse(buf.slice(0, nl));
+    buf = buf.slice(nl + 1);
+    const result = msg.method === "initialize" ? { protocolVersion: 1 }
+      : { models: { availableModels: [{ modelId: "custom:gpt-6.1-sol", name: "gpt-6.1-sol" }, { modelId: "custom:claude-opus-5-5", name: "claude-opus-5-5" }] } };
+    process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\\n");
+  }
+});
+`, { mode: 0o755 });
+    await expect(resolveHermesModels({ ...env, [HERMES_ACP_MODELS_TIMEOUT_ENV]: "5000" }, { cli })).resolves.toEqual({
+      default: HERMES_CONFIG_MODEL_ID,
+      options: [
+        { id: HERMES_CONFIG_MODEL_ID, label: "gpt-6.1-sol (Hermes config)", custom: true },
+        { id: "custom:gpt-6.1-sol", label: "gpt-6.1-sol", custom: true },
+        { id: "custom:claude-opus-5-5", label: "claude-opus-5-5", custom: true },
+      ],
+    });
+  });
+
   it("keeps today's list when a hosted provider is configured", async () => {
     const { cli, env } = setup("OPENROUTER_API_KEY=sk-or-v1-test\n", "model:\n  default: anthropic/claude-opus-4.6\n");
     await expect(resolveHermesModels(env, { cli })).resolves.toEqual({

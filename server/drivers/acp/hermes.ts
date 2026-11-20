@@ -202,6 +202,18 @@ export function hermesConfiguredModel(
   return hermesConfigOption(configuredDefault?.model ?? "");
 }
 
+/** The model of a config.yaml whose provider is `custom` or `custom:<name>`: an OpenAI-compatible endpoint that
+ * Hermes lists in its own ACP catalog, which no local probe of ours can read. */
+export function hermesCustomEndpointModel(env: Record<string, string | undefined> = process.env): string | null {
+  const dir = env.HERMES_HOME || harnessHome("hermes", env);
+  let configuredDefault: { model: string; provider: string } | null = null;
+  try {
+    configuredDefault = hermesConfigDefault(readFileSync(join(dir, "config.yaml"), "utf8"));
+  } catch {}
+  const provider = configuredDefault?.provider.toLowerCase() ?? "";
+  return provider === "custom" || provider.startsWith("custom:") ? configuredDefault!.model : null;
+}
+
 /** A runnable file, so the default entry never points at a directory or a file that can't start. A wrapper such as
  * `wsl hermes` is looked up by its first word, as resolveCliSpawn launches it, and any runnable PATH match counts. */
 function hermesInstalled(cli: string): boolean {
@@ -368,9 +380,12 @@ export async function resolveHermesModels(
   const cli = config?.cli || "hermes";
   const catalog = await mergeLocalInject(EMPTY, env);
   const configured = hermesConfiguredModel(env);
-  const remote = configured ? await fetchHermesAcpModels(cli, env, allowEnv) : [];
+  const endpointModel = configured ? null : hermesCustomEndpointModel(env);
+  const listsOwnCatalog = configured !== null || endpointModel !== null;
+  const remote = listsOwnCatalog ? await fetchHermesAcpModels(cli, env, allowEnv) : [];
+  const head = configured ?? (endpointModel !== null && remote.length ? hermesConfigOption(endpointModel) : null);
   const seen = new Set<string>();
-  const options = [...(configured ? [configured] : []), ...remote, ...catalog.options].filter((o) => {
+  const options = [...(head ? [head] : []), ...remote, ...catalog.options].filter((o) => {
     if (seen.has(o.id)) return false;
     seen.add(o.id);
     return true;
