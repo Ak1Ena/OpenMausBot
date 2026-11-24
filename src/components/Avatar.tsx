@@ -22,6 +22,7 @@ import { t } from "@/lib/i18n";
 import { CarvedAvatar, vivid } from "./CarvedAvatar";
 import { ObjectAvatar } from "./ObjectAvatar";
 import { steelBodyImage } from "@/lib/steel-body";
+import { stillFrameUrl } from "@/lib/still-frame";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
@@ -241,6 +242,8 @@ export const MausAvatar = memo(forwardRef(MausAvatarComponent));
 
 export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
   readable?: boolean;
+  /** The bot is on a run now (a caller that knows run state but whose bot has no `busy`); an animated picture plays only then. */
+  working?: boolean;
   bot: {
     name?: string;
     color: MausColor;
@@ -252,6 +255,7 @@ export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
     mascotBody?: BotBodyId | null;
     mascotFaceColor?: MascotFaceColor | null;
     mascotBodyColor?: string | null;
+    busy?: boolean;
   };
 };
 
@@ -270,12 +274,25 @@ export function resolveBotAvatarOutcome(params: {
   return "flatImage";
 }
 
-export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotProps }: BotAvatarProps) {
+export function BotAvatar({ bot, size = 44, label, readable = false, working = false, ...mascotProps }: BotAvatarProps) {
   const profile = botAvatarProfile(bot);
   const festival = useFestivalDress();
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => setImageFailed(false), [profile.avatarUrl]);
+
+  // An animated picture moves only on a real run: the bot's busy flag or the caller's `working`. Not `animated` (the mascot's
+  // "may move", also true for a beat or an unread notice) and not `state` (stateForBot guesses one from the bot's name).
+  const playing = Boolean(bot.busy) || working;
+  const pictureUrl = profile.avatarUrl;
+  const [still, setStill] = useState<{ url: string; src: string } | null>(null);
+  const shown = !playing && still && still.url === pictureUrl ? still.src : pictureUrl;
+  useEffect(() => {
+    if (playing || !pictureUrl) return;
+    let current = true;
+    void stillFrameUrl(pictureUrl).then((src) => current && setStill(src ? { url: pictureUrl, src } : null));
+    return () => { current = false; };
+  }, [playing, pictureUrl]);
 
   const outcome = resolveBotAvatarOutcome({
     avatarCrop: profile.avatarCrop,
@@ -311,7 +328,7 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
       style={{ width: size, height: size, borderRadius: radius }}
     >
       <img
-        src={profile.avatarUrl}
+        src={shown}
         alt={label ?? (bot.name ? t("avatar.alt", { name: bot.name }) : t("avatar.altFallback"))}
         width={size}
         height={size}

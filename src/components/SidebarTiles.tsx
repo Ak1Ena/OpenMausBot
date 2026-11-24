@@ -88,6 +88,7 @@ export const SidebarBotTile = memo(function SidebarBotTile({ primary = false, dr
           motion={(beat && mascotMotion?.kind) || "none"}
           motionKey={mascotMotion?.nonce ?? 0}
           animated={beat || working || noticing}
+          working={working}
         />
         {primary && bot.chiefOfStaff && (
           <span data-testid="chief-badge" className={cn("absolute -bottom-px -right-px flex size-4 items-center justify-center rounded-full bg-[#E8993A] text-white", RING)}>
