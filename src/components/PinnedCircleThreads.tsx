@@ -229,6 +229,7 @@ export const PinnedBotCircle = memo(function PinnedBotCircle({
               motion={(beat && mascotMotion?.kind) || "none"}
               motionKey={mascotMotion?.nonce ?? 0}
               animated={beat || working || noticing}
+              working={working}
             />
           </span>
           {unread && (

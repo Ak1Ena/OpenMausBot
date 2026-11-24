@@ -738,7 +738,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
           size={simpleRow ? avatarSize + 6 : avatarSize}
           motion={(beat && mascotMotion?.kind) || "none"}
           motionKey={mascotMotion?.nonce ?? 0}
-          animated={beat || working || noticing}
+          animated={beat || working || noticing} working={working}
         />
         {/* Bottom-left, clear of the status dots on the right and of the row's hover actions. */}
         {(iconOnly || !simpleList) && <BotModelBadge bot={bot} instances={instances} avatarSize={avatarSize} />}

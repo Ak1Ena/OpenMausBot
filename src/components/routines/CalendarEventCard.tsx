@@ -105,7 +105,7 @@ export const CalendarEventCard = memo(function CalendarEventCard({
   const dot = !isCall && <span data-event-status={paused ? "paused" : attention ? "needs-you" : "working"} className={cn("size-1.5 shrink-0 rounded-full", paused ? "bg-ink-tertiary" : attention ? "bg-warning" : "bg-success")} />;
   const avatar = (size: number) => isCall
     ? <Video size={13} className="mt-0.5 shrink-0" />
-    : primary ? <BotAvatar bot={primary} state={status ? statusState(status) : paused ? "sleeping" : "idle"} size={size} animated={status === "running" || status === "waiting"} /> : null;
+    : primary ? <BotAvatar bot={primary} state={status ? statusState(status) : paused ? "sleeping" : "idle"} size={size} animated={status === "running" || status === "waiting"} working={status === "running"} /> : null;
 
   return (
     <button

@@ -503,6 +503,7 @@ function GroupCall({ group, members }: { group: Group; members: Bot[] }) {
                   state={state}
                   size={94}
                   animated
+                  working={workingMember?.id === member.id}
                   motion={workingMember?.id === member.id ? "working" : "none"}
                   motionKey={workingMember?.id === member.id ? 1 : 0}
                 />

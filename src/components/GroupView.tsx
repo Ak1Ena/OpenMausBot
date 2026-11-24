@@ -926,6 +926,7 @@ export function GroupView({ group, inForkPanel = false }: { group: Group; inFork
                 <BotAvatar
                   bot={presenceSpeaker ?? { color: "green" }}
                   state={toolInFlight && !awaited ? "working" : "thinking"}
+                  working
                   size={36}
                   forward={false}
                   lookAround={1}

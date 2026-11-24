@@ -3,6 +3,7 @@ import {
   memo,
   useEffect,
   useImperativeHandle,
+  useReducer,
   useRef,
   useState,
   type ReactNode,
@@ -22,6 +23,7 @@ import { t } from "@/lib/i18n";
 import { CarvedAvatar, vivid } from "./CarvedAvatar";
 import { ObjectAvatar } from "./ObjectAvatar";
 import { steelBodyImage } from "@/lib/steel-body";
+import { peekStill, stillFrameUrl } from "@/lib/still-frame";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
@@ -241,6 +243,8 @@ export const MausAvatar = memo(forwardRef(MausAvatarComponent));
 
 export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
   readable?: boolean;
+  /** The bot is on a run now (a caller that knows run state but whose bot has no `busy`); an animated picture plays only then. */
+  working?: boolean;
   bot: {
     name?: string;
     color: MausColor;
@@ -252,6 +256,9 @@ export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
     mascotBody?: BotBodyId | null;
     mascotFaceColor?: MascotFaceColor | null;
     mascotBodyColor?: string | null;
+    busy?: boolean;
+    /** "waiting-on-you" is not working: the picture holds still then, though busy stays true. */
+    activity?: string;
   };
 };
 
@@ -270,7 +277,7 @@ export function resolveBotAvatarOutcome(params: {
   return "flatImage";
 }
 
-export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotProps }: BotAvatarProps) {
+export function BotAvatar({ bot, size = 44, label, readable = false, working = false, ...mascotProps }: BotAvatarProps) {
   const profile = botAvatarProfile(bot);
   const festival = useFestivalDress();
   const [imageFailed, setImageFailed] = useState(false);
@@ -282,6 +289,22 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
     hasUrl: Boolean(profile.avatarUrl),
     imageFailed,
   });
+
+  // An animated picture moves only on a real run: the bot's busy flag or the caller's `working`, and never while it waits on
+  // the person (busy stays true then). Not `animated` (the mascot's "may move", also true for a beat or an unread notice) and
+  // not `state` (stateForBot guesses one from the bot's name).
+  const playing = bot.activity !== "waiting-on-you" && (Boolean(bot.busy) || working);
+  const pictureUrl = profile.avatarUrl;
+  const holdsStill = outcome === "flatImage" && !playing && Boolean(pictureUrl);
+  const [, stillMade] = useReducer((made: number) => made + 1, 0);
+  // Read during render, so a remount of a picture already made starts still instead of moving.
+  const still = holdsStill && pictureUrl ? peekStill(pictureUrl) : null;
+  useEffect(() => {
+    if (!holdsStill || !pictureUrl) return;
+    let current = true;
+    void stillFrameUrl(pictureUrl).then(() => current && stillMade());
+    return () => { current = false; };
+  }, [holdsStill, pictureUrl]);
 
   if (outcome !== "flatImage") {
     return (
@@ -311,7 +334,7 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
       style={{ width: size, height: size, borderRadius: radius }}
     >
       <img
-        src={profile.avatarUrl}
+        src={still ?? profile.avatarUrl}
         alt={label ?? (bot.name ? t("avatar.alt", { name: bot.name }) : t("avatar.altFallback"))}
         width={size}
         height={size}
