@@ -1,11 +1,21 @@
 // @vitest-environment happy-dom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { stillFrameUrl } from "@/lib/still-frame";
 import { BotAvatar, type BotAvatarProps } from "./Avatar";
 
-vi.mock("@/lib/still-frame", () => ({ stillFrameUrl: vi.fn(async (url: string) => (url.endsWith(".gif") ? "blob:still-of-gif" : null)) }));
+const stills = vi.hoisted(() => new Map<string, string | null>());
+vi.mock("@/lib/still-frame", () => ({
+  peekStill: (url: string) => stills.get(url),
+  stillFrameUrl: vi.fn(async (url: string) => {
+    const still = url.endsWith(".gif") ? "blob:still-of-gif" : null;
+    stills.set(url, still);
+    return still;
+  }),
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -25,6 +35,8 @@ async function draw(bot: Partial<BotAvatarProps["bot"]>, props: Partial<BotAvata
 }
 
 afterEach(() => {
+  stills.clear();
+  vi.mocked(stillFrameUrl).mockClear();
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -64,6 +76,28 @@ describe("an uploaded GIF avatar", () => {
 
   it("lets a busy bot play even where the list keeps its mascot calm", async () => {
     expect((await draw({ busy: true }, { animated: false })).src()).toBe(GIF);
+  });
+
+  it("holds still while the bot waits on the person, though busy stays true", async () => {
+    expect((await draw({ busy: true, activity: "waiting-on-you" })).src()).toBe("blob:still-of-gif");
+    expect((await draw({ busy: true, activity: "waiting-on-you" }, { working: true })).src()).toBe("blob:still-of-gif");
+    const avatar = await draw({ busy: true, activity: "working" });
+    expect(avatar.src()).toBe(GIF);
+    await avatar.show({ busy: true, activity: "waiting-on-you" });
+    expect(avatar.src()).toBe("blob:still-of-gif");
+  });
+
+  it("starts still when a known GIF mounts again, with no moving frame first", async () => {
+    await draw({});
+    const html = renderToStaticMarkup(createElement(BotAvatar, { bot: { color: "green", avatarUrl: GIF, avatarCrop: "circle" } }));
+    expect(html).toContain('src="blob:still-of-gif"');
+    const playing = renderToStaticMarkup(createElement(BotAvatar, { bot: { color: "green", avatarUrl: GIF, avatarCrop: "circle", busy: true } }));
+    expect(playing).toContain(`src="${GIF}"`);
+  });
+
+  it("makes no still for a bot that wears its mascot instead of the picture", async () => {
+    await draw({ avatarCrop: "mascot" });
+    expect(stillFrameUrl).not.toHaveBeenCalled();
   });
 
   it("leaves a picture that does not move exactly as it was", async () => {

@@ -3,6 +3,7 @@ import {
   memo,
   useEffect,
   useImperativeHandle,
+  useReducer,
   useRef,
   useState,
   type ReactNode,
@@ -22,7 +23,7 @@ import { t } from "@/lib/i18n";
 import { CarvedAvatar, vivid } from "./CarvedAvatar";
 import { ObjectAvatar } from "./ObjectAvatar";
 import { steelBodyImage } from "@/lib/steel-body";
-import { stillFrameUrl } from "@/lib/still-frame";
+import { peekStill, stillFrameUrl } from "@/lib/still-frame";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
@@ -256,6 +257,8 @@ export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
     mascotFaceColor?: MascotFaceColor | null;
     mascotBodyColor?: string | null;
     busy?: boolean;
+    /** "waiting-on-you" is not working: the picture holds still then, though busy stays true. */
+    activity?: string;
   };
 };
 
@@ -281,24 +284,27 @@ export function BotAvatar({ bot, size = 44, label, readable = false, working = f
 
   useEffect(() => setImageFailed(false), [profile.avatarUrl]);
 
-  // An animated picture moves only on a real run: the bot's busy flag or the caller's `working`. Not `animated` (the mascot's
-  // "may move", also true for a beat or an unread notice) and not `state` (stateForBot guesses one from the bot's name).
-  const playing = Boolean(bot.busy) || working;
-  const pictureUrl = profile.avatarUrl;
-  const [still, setStill] = useState<{ url: string; src: string } | null>(null);
-  const shown = !playing && still && still.url === pictureUrl ? still.src : pictureUrl;
-  useEffect(() => {
-    if (playing || !pictureUrl) return;
-    let current = true;
-    void stillFrameUrl(pictureUrl).then((src) => current && setStill(src ? { url: pictureUrl, src } : null));
-    return () => { current = false; };
-  }, [playing, pictureUrl]);
-
   const outcome = resolveBotAvatarOutcome({
     avatarCrop: profile.avatarCrop,
     hasUrl: Boolean(profile.avatarUrl),
     imageFailed,
   });
+
+  // An animated picture moves only on a real run: the bot's busy flag or the caller's `working`, and never while it waits on
+  // the person (busy stays true then). Not `animated` (the mascot's "may move", also true for a beat or an unread notice) and
+  // not `state` (stateForBot guesses one from the bot's name).
+  const playing = bot.activity !== "waiting-on-you" && (Boolean(bot.busy) || working);
+  const pictureUrl = profile.avatarUrl;
+  const holdsStill = outcome === "flatImage" && !playing && Boolean(pictureUrl);
+  const [, stillMade] = useReducer((made: number) => made + 1, 0);
+  // Read during render, so a remount of a picture already made starts still instead of moving.
+  const still = holdsStill && pictureUrl ? peekStill(pictureUrl) : null;
+  useEffect(() => {
+    if (!holdsStill || !pictureUrl) return;
+    let current = true;
+    void stillFrameUrl(pictureUrl).then(() => current && stillMade());
+    return () => { current = false; };
+  }, [holdsStill, pictureUrl]);
 
   if (outcome !== "flatImage") {
     return (
@@ -328,7 +334,7 @@ export function BotAvatar({ bot, size = 44, label, readable = false, working = f
       style={{ width: size, height: size, borderRadius: radius }}
     >
       <img
-        src={shown}
+        src={still ?? profile.avatarUrl}
         alt={label ?? (bot.name ? t("avatar.alt", { name: bot.name }) : t("avatar.altFallback"))}
         width={size}
         height={size}
