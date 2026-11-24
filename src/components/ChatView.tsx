@@ -1141,8 +1141,7 @@ export const ChatView = memo(function ChatView({ bot: profile, inForkPanel = fal
             avatar={
               <BotAvatar
                 bot={bot}
-                state={toolInFlight ? "working" : "thinking"}
-                working
+                state={toolInFlight ? "working" : "thinking"} working
                 size={advanced ? 36 : 28}
                 forward={false}
                 lookAround={1}
